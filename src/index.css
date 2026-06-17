@@ -161,3 +161,105 @@ input[type=number] {
     line-height: 1.2;
   }
 }
+
+/* Global Dark Mode / Soft Neumorphic Dark Theme overrides */
+html.dark {
+  --bg: #1B2028;
+  --shadow-dark: #101318;
+  --shadow-light: #262D38;
+  --accent: #63b3ed;
+  color-scheme: dark;
+}
+
+html.dark body {
+  background-color: var(--bg) !important;
+  color: #E2E8F0 !important;
+}
+
+html.dark .glass-bg, html.dark .glass-panel {
+  background: rgba(30, 41, 59, 0.45) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+html.dark .bg-white {
+  background-color: rgba(30, 41, 59, 0.55) !important;
+}
+
+html.dark .bg-slate-50 {
+  background-color: rgba(30, 41, 59, 0.35) !important;
+}
+
+html.dark .bg-slate-100 {
+  background-color: var(--bg) !important;
+}
+
+html.dark .bg-slate-150 {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+}
+
+html.dark .text-slate-800, html.dark h1, html.dark h2, html.dark h3, html.dark h4, html.dark h5, html.dark h6 {
+  color: #E2E8F0 !important;
+}
+
+html.dark .text-slate-700 {
+  color: #CBD5E1 !important;
+}
+
+html.dark .text-slate-600 {
+  color: #94A3B8 !important;
+}
+
+html.dark .text-slate-500 {
+  color: #64748B !important;
+}
+
+html.dark .text-slate-750 {
+  color: #F8FAFC !important;
+}
+
+html.dark .text-slate-900 {
+  color: #FFFFFF !important;
+}
+
+html.dark .border-slate-200 {
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+html.dark .border-slate-100 {
+  border-color: rgba(255, 255, 255, 0.05) !important;
+}
+
+html.dark input, html.dark select, html.dark textarea {
+  color: #FFFFFF !important;
+  background-color: rgba(27, 32, 40, 0.6) !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+html.dark input::placeholder {
+  color: #475569 !important;
+}
+
+html.dark .neumorphic-btn, html.dark .btn-3d {
+  color: #E2E8F0 !important;
+}
+
+html.dark .neumorphic-flat, html.dark .neumorph-raised {
+  box-shadow: 8px 8px 16px var(--shadow-dark), -8px -8px 16px var(--shadow-light) !important;
+}
+
+html.dark .neumorphic-sunken, html.dark .neumorph-inset {
+  box-shadow: inset 5px 5px 10px var(--shadow-dark), inset -5px -5px 10px var(--shadow-light) !important;
+}
+
+html.dark ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+html.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+html.dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]) {
+  border-color: rgba(255, 255, 255, 0.05) !important;
+}
+

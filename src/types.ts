@@ -77,4 +77,5 @@ export interface AppSettings {
   taxRate: number;
   logoUrl?: string;
   printType: "A4" | "thermal";
+  theme?: "light" | "dark";
 }

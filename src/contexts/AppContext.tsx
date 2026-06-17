@@ -91,6 +91,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   taxRate: 15,
   logoUrl: "",
   printType: "thermal",
+  theme: "light",
 };
 
 export function AppProvider({ children }: { children: ReactNode }) {

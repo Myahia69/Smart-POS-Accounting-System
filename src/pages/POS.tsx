@@ -18,6 +18,10 @@ import {
   AlertCircle
 } from "lucide-react";
 import jsPDF from "jspdf";
+// @ts-ignore
+import printJS from "print-js";
+// @ts-ignore
+import html2canvas from "html2canvas";
 import { Product, Customer } from "../types";
 
 export default function POS() {
@@ -47,6 +51,16 @@ export default function POS() {
 
   // Active checkout bill popup
   const [checkedOutBill, setCheckedOutBill] = useState<any | null>(null);
+
+  // New States for Custom Print Preview & verification with printJS
+  const [showPrintPreview, setShowPrintPreview] = useState(false);
+  const [previewPaperWidth, setPreviewPaperWidth] = useState<"80mm" | "58mm">("80mm");
+  const [includeReceiptLogo, setIncludeReceiptLogo] = useState(true);
+  const [includeCashierName, setIncludeCashierName] = useState(true);
+  const [includeCustomerName, setIncludeCustomerName] = useState(true);
+  const [includeBarcode, setIncludeBarcode] = useState(true);
+  const [includeQRCode, setIncludeQRCode] = useState(true);
+  const [includeFooterMsg, setIncludeFooterMsg] = useState(true);
 
   // Ref to barcode hidden focus input
   const barcodeFocusRef = useRef<HTMLInputElement>(null);
@@ -184,87 +198,224 @@ export default function POS() {
     }
   };
 
-  // Generate jsPDF invoice download
+  // Generate jsPDF invoice download using html2canvas to perfectly support RTL Arabic shaping
   const handleSaveBillPDF = (saleBill: any) => {
-    const doc = new jsPDF({
-      unit: "mm",
-      format: [80, 150], // thermal dimensions
-    });
+    if (!saleBill) return;
 
-    // Custom pure client-side PDF template for multilingual
-    doc.setFont("Helvetica", "bold");
-    doc.setFontSize(10);
-    
-    // Header
-    const isEn = language === "en";
-    const title = isEn ? settings.storeNameEn : settings.storeName;
-    doc.text(title, 40, 10, { align: "center" });
-    
-    doc.setFontSize(7);
-    doc.text(isEn ? "INVOICE OF SALE" : "فاتورة مبيعات مبسطة", 40, 14, { align: "center" });
-    doc.text(`Invoice: ${saleBill.invoiceNumber}`, 5, 20);
-    doc.text(`Date: ${new Date(saleBill.date).toLocaleString()}`, 5, 24);
-    doc.text(`Cashier: ${saleBill.cashierName}`, 5, 28);
-    doc.text(`Customer: ${saleBill.customerName}`, 5, 32);
-    
-    doc.setLineWidth(0.1);
-    doc.line(5, 34, 75, 34);
+    // Use a small delay to make sure the offscreen element is fully populated
+    setTimeout(async () => {
+      const element = document.getElementById("pdf-receipt-target");
+      if (!element) return;
 
-    // Items table headers
-    doc.text(isEn ? "Item description" : "الصنف", 5, 38);
-    doc.text("Qty", 50, 38);
-    doc.text("Price", 60, 38);
-    doc.text("Total", 70, 38);
-    doc.line(5, 40, 75, 40);
+      try {
+        const canvas = await html2canvas(element, {
+          scale: 3.0, // High DPI rendering for absolutely crisp printing text output
+          useCORS: true,
+          logging: false,
+          backgroundColor: "#ffffff",
+        });
 
-    let y = 44;
-    saleBill.items.forEach((item: any) => {
-      // Due to Arabic PDF glyph limitations on standard jsPDF, we write transliterated / English name
-      const displayName = isEn ? item.nameEn : (item.nameEn || item.name);
-      doc.text(displayName.substring(0, 22), 5, y);
-      doc.text(`${item.quantity}`, 50, y);
-      doc.text(`${item.price.toFixed(1)}`, 60, y);
-      const rowTotal = item.price * item.quantity;
-      doc.text(`${rowTotal.toFixed(1)}`, 70, y);
-      y += 4;
-    });
+        const imgData = canvas.toDataURL("image/jpeg", 1.0);
 
-    doc.line(5, y, 75, y);
-    y += 4;
-    doc.text(isEn ? "Subtotal:" : "المجموع الفرعي:", 35, y);
-    doc.text(`${(saleBill.total - saleBill.tax + saleBill.discount).toFixed(2)} ${currency}`, 55, y);
-    
-    y += 4;
-    doc.text(isEn ? "Discount:" : "الخصم:", 35, y);
-    doc.text(`${saleBill.discount.toFixed(2)} ${currency}`, 55, y);
+        // Standard thermal width: 80mm
+        const pdfWidth = 80;
+        const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
 
-    y += 4;
-    doc.text(isEn ? "Tax (VAT):" : "الضريبة المضافة:", 35, y);
-    doc.text(`${saleBill.tax.toFixed(2)} ${currency}`, 55, y);
+        const doc = new jsPDF({
+          orientation: "portrait",
+          unit: "mm",
+          format: [pdfWidth, pdfHeight],
+        });
 
-    y += 4;
-    doc.setFontSize(8);
-    doc.text(isEn ? "Grand Total:" : "المجموع النهائي:", 35, y);
-    doc.text(`${saleBill.total.toFixed(2)} ${currency}`, 55, y);
-
-    y += 5;
-    doc.setFontSize(7);
-    doc.text(isEn ? "Received Cash:" : "مسدد نقداً:", 35, y);
-    doc.text(`${saleBill.received.toFixed(2)} ${currency}`, 55, y);
-
-    y += 4;
-    doc.text(isEn ? "Refund Cash:" : "متبقي للمستهلك:", 35, y);
-    doc.text(`${saleBill.change.toFixed(2)} ${currency}`, 55, y);
-
-    y += 8;
-    doc.text(isEn ? "Thank you for shopping with us!" : "شكراً لزيارتكم وشرائكم!", 40, y, { align: "center" });
-
-    doc.save(`Invoice_${saleBill.invoiceNumber}.pdf`);
+        doc.addImage(imgData, "JPEG", 0, 0, pdfWidth, pdfHeight, undefined, "FAST");
+        doc.save(`Invoice_${saleBill.invoiceNumber}.pdf`);
+      } catch (err) {
+        console.error("Failed to generate PDF with html2canvas", err);
+        
+        // Robust fallback to simple text jsPDF output
+        const doc = new jsPDF({
+          unit: "mm",
+          format: [80, 150],
+        });
+        doc.setFont("Helvetica", "bold");
+        doc.setFontSize(10);
+        const isEn = language === "en";
+        const title = isEn ? settings.storeNameEn : settings.storeName;
+        doc.text(title, 40, 10, { align: "center" });
+        doc.setFontSize(7);
+        doc.text(`Invoice: ${saleBill.invoiceNumber}`, 5, 20);
+        doc.text(`Date: ${new Date(saleBill.date).toLocaleString()}`, 5, 24);
+        doc.save(`Invoice_${saleBill.invoiceNumber}.pdf`);
+      }
+    }, 150);
   };
 
-  // Direct physical print triggers
-  const triggerThermalPrint = () => {
-    window.print();
+  // Visual helper to draw black/white alternating lines mimicking barcode
+  const renderMockBarcodeLines = (invoiceNumber: string) => {
+    const hash = invoiceNumber || "INV-0000";
+    const bars = [];
+    for (let i = 0; i < Math.min(hash.length, 12); i++) {
+      const charCode = hash.charCodeAt(i);
+      bars.push(charCode % 2 === 0 ? "w-[1px] h-8 bg-black" : "w-[3px] h-8 bg-black");
+      bars.push("w-[1.5px] h-8 bg-transparent");
+    }
+    return (
+      <div className="flex items-center justify-center space-x-[0.5px] h-8 overflow-hidden select-none mb-1">
+        {bars}
+      </div>
+    );
+  };
+
+  // Visual helper for rendering simulated simplified QR code
+  const renderElegentQRCode = (invoiceNumber: string, total: number) => {
+    return (
+      <div className="w-16 h-16 bg-white p-1 border border-slate-200 rounded mx-auto flex items-center justify-center">
+        <svg className="w-full h-full text-slate-900" viewBox="0 0 100 100" fill="currentColor">
+          <path d="M 0,0 h 30 v 30 h -30 z M 10,10 h 10 v 10 h -10 z" />
+          <path d="M 70,0 h 30 v 30 h -30 z M 80,10 h 10 v 10 h -10 z" />
+          <path d="M 0,70 h 30 v 30 h -30 z M 10,80 h 10 v 10 h -10 z" />
+          <path d="M 40,40 h 10 v 10 h -10 z M 50,50 h 10 v 10 h -10 z M 40,60 h 10 v 10 h -10 z C 60,60 70,60 80,60 h 10 v 10 h -10 z" />
+          <path d="M 40,10 h 10 v 10 h -10 z M 50,20 h 10 v 10 h -10 z M 50,0 h 10 v 10 h -10 z M 30,40 h 10 v 10 h -10 z" />
+          <path d="M 10,40 h 10 v 10 h -10 z M 20,50 h 10 v 10 h -10 z M 0,50 h 10 v 10 h -10 z" />
+          <path d="M 70,40 h 10 v 10 h -10 z M 80,50 h 10 v 10 h -10 z M 90,40 h 10 v 10 h -10 z" />
+        </svg>
+      </div>
+    );
+  };
+
+  // Direct physical print triggers (using PrintJS on a beautifully styled layout container)
+  const triggerPrintJSReceipt = () => {
+    if (!checkedOutBill) return;
+    printJS({
+      printable: "printjs-receipt-target",
+      type: "html",
+      scanStyles: false,
+      style: `
+        @media print {
+          body {
+            background-color: #ffffff !important;
+            color: #000000 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 100% !important;
+            direction: ${language === "ar" ? "rtl" : "ltr"} !important;
+            font-family: 'Courier New', Courier, monospace !important;
+            -webkit-print-color-adjust: exact;
+          }
+          .print-receipt-sheet {
+            width: ${previewPaperWidth === "58mm" ? "54mm" : "74mm"} !important;
+            margin: 0 auto !important;
+            padding: 4mm 2mm !important;
+            box-sizing: border-box !important;
+            text-align: center !important;
+            font-size: 11px !important;
+            line-height: 1.4 !important;
+          }
+          .print-receipt-logo {
+            font-size: 15px !important;
+            font-weight: bold !important;
+            margin: 0 0 3px 0 !important;
+            text-align: center !important;
+            text-transform: uppercase !important;
+          }
+          .print-receipt-sub {
+            font-size: 10px !important;
+            margin: 0 0 10px 0 !important;
+            text-align: center !important;
+          }
+          .print-receipt-meta {
+            font-size: 10px !important;
+            margin-bottom: 8px !important;
+            text-align: right !important;
+          }
+          .print-receipt-meta-row {
+            display: flex !important;
+            justify-content: space-between !important;
+            margin-bottom: 2px !important;
+          }
+          .print-receipt-divider {
+            border-top: 1px dashed #000000 !important;
+            margin: 8px 0 !important;
+            height: 0 !important;
+            width: 100% !important;
+          }
+          .print-receipt-table {
+            width: 100% !important;
+            border-collapse: collapse !important;
+            font-size: 10px !important;
+            margin: 8px 0 !important;
+          }
+          .print-receipt-table th {
+            border-bottom: 1px dashed #000000 !important;
+            padding-bottom: 4px !important;
+            text-align: ${language === "ar" ? "right" : "left"} !important;
+            font-weight: bold !important;
+          }
+          .print-receipt-table td {
+            padding: 4px 0 !important;
+            vertical-align: top !important;
+          }
+          .print-receipt-item-name {
+            text-align: ${language === "ar" ? "right" : "left"} !important;
+            width: 50% !important;
+          }
+          .print-receipt-item-qty {
+            text-align: center !important;
+            width: 15% !important;
+          }
+          .print-receipt-item-price {
+            text-align: ${language === "ar" ? "left" : "right"} !important;
+            width: 15% !important;
+          }
+          .print-receipt-item-total {
+            text-align: ${language === "ar" ? "left" : "right"} !important;
+            font-weight: bold !important;
+            width: 20% !important;
+          }
+          .print-receipt-total-section {
+            font-size: 10px !important;
+            margin-top: 8px !important;
+          }
+          .print-receipt-total-row {
+            display: flex !important;
+            justify-content: space-between !important;
+            margin-bottom: 3px !important;
+          }
+          .print-receipt-grand-total {
+            display: flex !important;
+            justify-content: space-between !important;
+            font-size: 12px !important;
+            font-weight: bold !important;
+            border-top: 1px dashed #000000 !important;
+            border-bottom: 1px dashed #000000 !important;
+            padding: 6px 0 !important;
+            margin: 6px 0 !important;
+          }
+          .print-receipt-barcode-wrap {
+            margin-top: 12px !important;
+            text-align: center !important;
+          }
+          .print-receipt-barcode-text {
+            font-size: 8px !important;
+            letter-spacing: 2px !important;
+          }
+          .print-receipt-footer {
+            font-size: 9px !important;
+            margin-top: 12px !important;
+            text-align: center !important;
+          }
+          .align-right {
+            text-align: right !important;
+          }
+          .align-left {
+            text-align: left !important;
+          }
+          .align-center {
+            text-align: center !important;
+          }
+        }
+      `
+    });
   };
 
   return (
@@ -732,11 +883,11 @@ export default function POS() {
               <div className="mt-5 grid grid-cols-3 gap-2 select-none">
                 <button
                   id="bill-print"
-                  onClick={triggerThermalPrint}
+                  onClick={() => setShowPrintPreview(true)}
                   className="flex flex-col items-center gap-1 p-2.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold hover:shadow-md cursor-pointer transition text-[9px]"
                 >
                   <Printer className="w-4 h-4" />
-                  <span>طباعة حرارية</span>
+                  <span>{language === "ar" ? "معاينة وتعديل" : "Layout Preview"}</span>
                 </button>
 
                 <button
@@ -756,6 +907,585 @@ export default function POS() {
                   <ShoppingBag className="w-4 h-4" />
                   <span>إغلاق الفاتورة</span>
                 </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Hidden printer-friendly compilation container for PrintJS */}
+      <div style={{ display: "none" }}>
+        {checkedOutBill && (
+          <div id="printjs-receipt-target" className="text-black bg-white font-mono text-[11px]" style={{ direction: language === "ar" ? "rtl" : "ltr" }}>
+            <div className="print-receipt-sheet">
+              {/* 1. Logo Header */}
+              {includeReceiptLogo && (
+                <>
+                  <div className="print-receipt-logo" style={{ fontSize: "16px", fontWeight: "bold", textAlign: "center", margin: "0 0 2px 0" }}>
+                    {language === "ar" ? settings.storeName : settings.storeNameEn}
+                  </div>
+                  <div className="print-receipt-sub" style={{ fontSize: "10px", textAlign: "center", margin: "0 0 8px 0" }}>
+                    {language === "ar" ? "فاتورة ضريبية مبسطة" : "Simplified Tax Invoice"}
+                  </div>
+                </>
+              )}
+
+              {/* 2. Metadata details */}
+              <div className="print-receipt-meta" style={{ fontSize: "10px", textAlign: "right", marginBottom: "8px" }}>
+                <div className="print-receipt-meta-row" style={{ display: "flex", justifyContent: "space-between", marginBottom: "2px" }}>
+                  <span>{t("invoice_no")}:</span>
+                  <span>{checkedOutBill.invoiceNumber}</span>
+                </div>
+                <div className="print-receipt-meta-row" style={{ display: "flex", justifyContent: "space-between", marginBottom: "2px" }}>
+                  <span>{t("date")}:</span>
+                  <span>{new Date(checkedOutBill.date).toLocaleString()}</span>
+                </div>
+                {includeCashierName && (
+                  <div className="print-receipt-meta-row" style={{ display: "flex", justifyContent: "space-between", marginBottom: "2px" }}>
+                    <span>{t("cashier")}:</span>
+                    <span>{checkedOutBill.cashierName}</span>
+                  </div>
+                )}
+                {includeCustomerName && (
+                  <div className="print-receipt-meta-row" style={{ display: "flex", justifyContent: "space-between", marginBottom: "2px" }}>
+                    <span>{t("customer")}:</span>
+                    <span>{checkedOutBill.customerName}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="print-receipt-divider" style={{ borderTop: "1px dashed #000000", margin: "6px 0", height: "0" }}></div>
+
+              {/* 3. Items list */}
+              <table className="print-receipt-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: "10px", margin: "6px 0" }}>
+                <thead>
+                  <tr style={{ borderBottom: "1px dashed #000000" }}>
+                    <th className="align-right" style={{ width: "45%", paddingBottom: "4px", textAlign: language === "ar" ? "right" : "left", fontWeight: "bold" }}>{language === "ar" ? "الصنف" : "Item"}</th>
+                    <th className="align-center" style={{ width: "15%", paddingBottom: "4px", textAlign: "center", fontWeight: "bold" }}>{language === "ar" ? "الكمية" : "Qty"}</th>
+                    <th className="align-left" style={{ width: "20%", paddingBottom: "4px", textAlign: language === "ar" ? "left" : "right", fontWeight: "bold" }}>{language === "ar" ? "السعر" : "Price"}</th>
+                    <th className="align-left" style={{ width: "20%", paddingBottom: "4px", textAlign: language === "ar" ? "left" : "right", fontWeight: "bold" }}>{language === "ar" ? "الإجمالي" : "Total"}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {checkedOutBill.items.map((it: any) => (
+                    <tr key={it.productId}>
+                      <td className="print-receipt-item-name align-right" style={{ padding: "4px 0", textAlign: language === "ar" ? "right" : "left", verticalAlign: "top" }}>
+                        {language === "ar" ? it.name : it.nameEn}
+                      </td>
+                      <td className="print-receipt-item-qty align-center" style={{ padding: "4px 0", textAlign: "center", verticalAlign: "top" }}>{it.quantity}</td>
+                      <td className="print-receipt-item-price align-left" style={{ padding: "4px 0", textAlign: language === "ar" ? "left" : "right", verticalAlign: "top" }}>{it.price.toFixed(1)}</td>
+                      <td className="print-receipt-item-total align-left" style={{ padding: "4px 0", textAlign: language === "ar" ? "left" : "right", verticalAlign: "top", fontWeight: "bold" }}>{(it.price * it.quantity).toFixed(1)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              <div className="print-receipt-divider" style={{ borderTop: "1px dashed #000000", margin: "6px 0", height: "0" }}></div>
+
+              {/* 4. Total and subtotal calculations */}
+              <div className="print-receipt-total-section" style={{ fontSize: "10px", marginTop: "6px" }}>
+                <div className="print-receipt-total-row" style={{ display: "flex", justifyContent: "space-between", marginBottom: "2px" }}>
+                  <span>{t("subtotal")}:</span>
+                  <span>{(checkedOutBill.total - checkedOutBill.tax + checkedOutBill.discount).toFixed(2)} {currency}</span>
+                </div>
+                {checkedOutBill.discount > 0 && (
+                  <div className="print-receipt-total-row" style={{ display: "flex", justifyContent: "space-between", marginBottom: "2px", color: "#000000" }}>
+                    <span>{t("discount")}:</span>
+                    <span>-{checkedOutBill.discount.toFixed(2)} {currency}</span>
+                  </div>
+                )}
+                <div className="print-receipt-total-row" style={{ display: "flex", justifyContent: "space-between", marginBottom: "2px" }}>
+                  <span>{t("tax_vat")} ({settings.taxRate}%):</span>
+                  <span>{checkedOutBill.tax.toFixed(2)} {currency}</span>
+                </div>
+                <div className="print-receipt-grand-total" style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", fontWeight: "bold", borderTop: "1px dashed #000000", borderBottom: "1px dashed #000000", padding: "3px 0", margin: "4px 0" }}>
+                  <span>{t("total")}:</span>
+                  <span>{checkedOutBill.total.toFixed(2)} {currency}</span>
+                </div>
+                <div className="print-receipt-total-row" style={{ display: "flex", justifyContent: "space-between", marginBottom: "2px", marginTop: "4px" }}>
+                  <span>{t("received_amount")}:</span>
+                  <span>{checkedOutBill.received.toFixed(2)} {currency}</span>
+                </div>
+                <div className="print-receipt-total-row" style={{ display: "flex", justifyContent: "space-between", marginBottom: "2px" }}>
+                  <span>{t("change_amount")}:</span>
+                  <span>{checkedOutBill.change.toFixed(2)} {currency}</span>
+                </div>
+              </div>
+
+              <div className="print-receipt-divider" style={{ borderTop: "1px dashed #000000", margin: "6px 0", height: "0" }}></div>
+
+              {/* 5. Simplified QR Code */}
+              {includeQRCode && (
+                <div style={{ margin: "10px 0", display: "flex", justifyContent: "center" }}>
+                  <svg style={{ width: "55px", height: "55px" }} viewBox="0 0 100 100">
+                    <path d="M 0,0 h 30 v 30 h -30 z M 10,10 h 10 v 10 h -10 z" fill="#000000" />
+                    <path d="M 70,0 h 30 v 30 h -30 z M 80,10 h 10 v 10 h -10 z" fill="#000000" />
+                    <path d="M 0,70 h 30 v 30 h -30 z M 10,80 h 10 v 10 h -10 z" fill="#000000" />
+                    <path d="M 40,40 h 10 v 10 h -10 z M 50,50 h 10 v 10 h -10 z" fill="#000000" />
+                    <path d="M 70,70 h 10 v 30 h -10 z M 90,80 h 10 v 20 h -10 z" fill="#000000" />
+                    <path d="M 40,10 h 10 v 10 h -10 z M 50,20 h 10 v 10 h -10 z" fill="#000000" />
+                  </svg>
+                </div>
+              )}
+
+              {/* 6. Barcode */}
+              {includeBarcode && (
+                <div className="print-receipt-barcode-wrap" style={{ marginTop: "10px", textAlign: "center" }}>
+                  <div className="print-receipt-barcode-text" style={{ fontSize: "9px", letterSpacing: "1px" }}>
+                    *{checkedOutBill.invoiceNumber}*
+                  </div>
+                </div>
+              )}
+
+              {/* 7. Footer Message */}
+              {includeFooterMsg && (
+                <div className="print-receipt-footer" style={{ fontSize: "9px", marginTop: "10px", textAlign: "center" }}>
+                  {language === "ar" ? "شكراً لزيارتكم وشرائكم!" : "Thank you for shopping with us!"}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Offscreen high-DPI container for HTML-to-PDF rendering with html2canvas */}
+      <div style={{ position: "absolute", left: "-9999px", top: "-9999px" }}>
+        {checkedOutBill && (
+          <div 
+            id="pdf-receipt-target" 
+            className="text-black bg-white p-5 font-mono text-[9px] w-[300px] leading-relaxed" 
+            style={{ direction: language === "ar" ? "rtl" : "ltr" }}
+          >
+            {/* Header store name */}
+            <div className="text-center mb-3">
+              <h4 className="text-[12px] font-extrabold" style={{ fontFamily: "Inter, sans-serif", textAlign: "center" }}>
+                {language === "ar" ? settings.storeName : settings.storeNameEn}
+              </h4>
+              <div className="text-[7.5px] uppercase tracking-wider text-slate-500 font-bold text-center">
+                {language === "ar" ? "فاتورة مبيعات مبسطة" : "Simplified Tax Invoice"}
+              </div>
+            </div>
+
+            {/* Metadata fields */}
+            <div className="border-b border-dashed border-slate-400 pb-2 mb-2 text-[8px] space-y-1">
+              <div className="flex justify-between" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>{t("invoice_no")}:</span>
+                <span className="font-bold">{checkedOutBill.invoiceNumber}</span>
+              </div>
+              <div className="flex justify-between" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>{t("date")}:</span>
+                <span>{new Date(checkedOutBill.date).toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>{t("cashier")}:</span>
+                <span>{checkedOutBill.cashierName}</span>
+              </div>
+              <div className="flex justify-between" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>{t("customer")}:</span>
+                <span>{checkedOutBill.customerName}</span>
+              </div>
+            </div>
+
+            {/* Items table */}
+            <table className="w-full text-right text-[8px] border-collapse mb-2" style={{ width: '100%' }}>
+              <thead>
+                <tr className="border-b border-dashed border-slate-400 font-bold text-slate-500">
+                  <th className="pb-1" style={{ textAlign: language === 'ar' ? 'right' : 'left' }}>{language === "ar" ? "الصنف" : "Item"}</th>
+                  <th className="pb-1" style={{ textAlign: 'center' }}>{language === "ar" ? "الكمية" : "Qty"}</th>
+                  <th className="pb-1" style={{ textAlign: language === 'ar' ? 'left' : 'right' }}>{language === "ar" ? "السعر" : "Price"}</th>
+                  <th className="pb-1" style={{ textAlign: language === 'ar' ? 'left' : 'right' }}>{language === "ar" ? "إجمالي" : "Total"}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-dashed divide-slate-200">
+                {checkedOutBill.items.map((it: any) => (
+                  <tr key={it.productId} className="text-slate-900 font-medium">
+                    <td className="py-1" style={{ textAlign: language === 'ar' ? 'right' : 'left' }}>
+                      {language === "ar" ? it.name : it.nameEn}
+                    </td>
+                    <td className="py-1" style={{ textAlign: 'center' }}>{it.quantity}</td>
+                    <td className="py-1" style={{ textAlign: language === 'ar' ? 'left' : 'right' }}>{it.price.toFixed(1)}</td>
+                    <td className="py-1 font-bold" style={{ textAlign: language === 'ar' ? 'left' : 'right' }}>{(it.price * it.quantity).toFixed(1)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {/* Calculations total block */}
+            <div className="border-t border-dashed border-slate-400 pt-1.5 space-y-1 text-right text-[8px]" style={{ textAlign: language === 'ar' ? 'right' : 'left' }}>
+              <div className="flex justify-between text-slate-600" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>{t("subtotal")}:</span>
+                <span>{(checkedOutBill.total - checkedOutBill.tax + checkedOutBill.discount).toFixed(2)} {currency}</span>
+              </div>
+              {checkedOutBill.discount > 0 && (
+                <div className="flex justify-between text-red-500 font-semibold" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>{t("discount")}:</span>
+                  <span>-{checkedOutBill.discount.toFixed(2)} {currency}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-slate-600" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>{t("tax_vat")} ({settings.taxRate}%):</span>
+                <span>{checkedOutBill.tax.toFixed(2)} {currency}</span>
+              </div>
+              <div className="flex justify-between font-bold text-[9px] text-slate-900 py-1 border-t border-dashed border-slate-300" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>{t("total")}:</span>
+                <span>{checkedOutBill.total.toFixed(2)} {currency}</span>
+              </div>
+              <div className="flex justify-between text-slate-600 border-t border-dashed border-slate-200 pt-0.5 text-[7.5px]" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>{t("received_amount")}:</span>
+                <span>{checkedOutBill.received.toFixed(2)} {currency}</span>
+              </div>
+              <div className="flex justify-between text-slate-600 text-[7.5px]" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>{t("change_amount")}:</span>
+                <span>{checkedOutBill.change.toFixed(2)} {currency}</span>
+              </div>
+            </div>
+
+            {/* QR Code */}
+            <div className="mt-3 text-center flex flex-col items-center justify-center">
+              <svg style={{ width: "60px", height: "60px", margin: '0 auto' }} viewBox="0 0 100 100" fill="#000000">
+                <path d="M 0,0 h 30 v 30 h -30 z M 10,10 h 10 v 10 h -10 z" />
+                <path d="M 70,0 h 30 v 30 h -30 z M 80,10 h 10 v 10 h -10 z" />
+                <path d="M 0,70 h 30 v 30 h -30 z M 10,80 h 10 v 10 h -10 z" />
+                <path d="M 40,40 h 10 v 10 h -10 z M 50,50 h 10 v 10 h -10 z" />
+                <path d="M 70,70 h 10 v 30 h -10 z M 90,80 h 10 v 20 h -10 z" />
+                <path d="M 40,10 h 10 v 10 h -10 z M 50,20 h 10 v 10 h -10 z" />
+              </svg>
+              <div className="text-[6.5px] text-slate-400 mt-1 font-bold uppercase text-center w-full">
+                {language === "ar" ? "الفوترة الإلكترونية مبسطة" : "Simplified VAT E-Invoice"}
+              </div>
+            </div>
+
+            {/* Barcode */}
+            <div className="mt-2.5 text-center flex flex-col items-center justify-center">
+              <div className="flex items-center justify-center space-x-[0.5px] h-6 overflow-hidden select-none mb-1 mx-auto" style={{ display: 'flex' }}>
+                {/* Simulated barcode bars */}
+                {[1,2,3,4,5,6,7,8,9,10,11,12].map((i) => (
+                  <div key={i} className={i % 2 === 0 ? "w-[1px] h-6 bg-black mr-[1px]" : "w-[2px] h-6 bg-black mr-[1px]"} />
+                ))}
+              </div>
+              <span className="block text-center text-[7px] text-slate-500 font-bold text-center">
+                *{checkedOutBill.invoiceNumber}*
+              </span>
+            </div>
+
+            {/* Footer message */}
+            <div className="mt-3 text-center text-[7.5px] text-slate-500 font-bold border-t border-dashed border-slate-200 pt-1.5 leading-normal text-center w-full">
+              {language === "ar" ? "شكراً لزيارتكم وشرائكم!" : "Thank you for shopping with us!"}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Dynamic Sizing Printer-Friendly Layout & Verification Modal */}
+      <AnimatePresence>
+        {showPrintPreview && checkedOutBill && (
+          <div className="fixed inset-0 bg-slate-900/65 backdrop-blur-md flex items-center justify-center p-4 z-50 overflow-y-auto">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-3xl p-6 shadow-2xl max-w-4xl w-full text-slate-800 text-xs text-right border flex flex-col md:flex-row gap-6 relative"
+            >
+              {/* Left Column: Config Panel */}
+              <div className="w-full md:w-1/2 flex flex-col justify-between space-y-4">
+                <div>
+                  <div className="flex items-center justify-between border-b pb-3 mb-4">
+                    <button
+                      type="button"
+                      onClick={() => setShowPrintPreview(false)}
+                      className="p-1.5 px-3 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-650 font-bold transition flex items-center gap-1 cursor-pointer text-[10px]"
+                    >
+                      ✕ {language === "ar" ? "إلغاء ورجوع" : "Cancel"}
+                    </button>
+                    <h3 className="text-xs font-bold text-slate-800">
+                      {language === "ar" ? "معاينة وإعداد تخطيط الفاتورة" : "Invoice Print Layout Settings"}
+                    </h3>
+                  </div>
+
+                  {/* Paper Width Config */}
+                  <div className="space-y-2">
+                    <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                      {language === "ar" ? "عرض ورق الطباعة" : "Paper Width"}
+                    </span>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setPreviewPaperWidth("80mm")}
+                        className={`py-2 rounded-xl font-bold border transition text-center cursor-pointer text-[10px] ${
+                          previewPaperWidth === "80mm"
+                            ? "bg-blue-50 border-blue-400 text-blue-700 font-extrabold" 
+                            : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                        }`}
+                      >
+                        {language === "ar" ? "80 مم (قياسي)" : "80mm (Standard)"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPreviewPaperWidth("58mm")}
+                        className={`py-2 rounded-xl font-bold border transition text-center cursor-pointer text-[10px] ${
+                          previewPaperWidth === "58mm"
+                            ? "bg-blue-50 border-blue-400 text-blue-700 font-extrabold" 
+                            : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                        }`}
+                      >
+                        {language === "ar" ? "58 مم (محمول)" : "58mm (Mobile)"}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Detail Toggles */}
+                  <div className="space-y-2.5 mt-4">
+                    <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+                      {language === "ar" ? "تعديل عناصر الفاتورة المعروضة" : "Customize Receipt Details"}
+                    </span>
+
+                    {/* Checkboxes */}
+                    <label className="flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-150 cursor-pointer hover:bg-slate-100 transition select-none">
+                      <span className="text-[10px] text-slate-600 font-semibold">
+                        {language === "ar" ? "تضمين شعار واسم المتجر الرئيسي" : "Include Main Store Name"}
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={includeReceiptLogo}
+                        onChange={(e) => setIncludeReceiptLogo(e.target.checked)}
+                        className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer"
+                      />
+                    </label>
+
+                    <label className="flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-150 cursor-pointer hover:bg-slate-100 transition select-none">
+                      <span className="text-[10px] text-slate-600 font-semibold">
+                        {language === "ar" ? "إظهار اسم محاسب المبيعات (الكاشير)" : "Display Active Cashier Name"}
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={includeCashierName}
+                        onChange={(e) => setIncludeCashierName(e.target.checked)}
+                        className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer"
+                      />
+                    </label>
+
+                    <label className="flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-150 cursor-pointer hover:bg-slate-100 transition select-none">
+                      <span className="text-[10px] text-slate-600 font-semibold">
+                        {language === "ar" ? "عرض اسم وبيانات العميل" : "Display Customer Records"}
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={includeCustomerName}
+                        onChange={(e) => setIncludeCustomerName(e.target.checked)}
+                        className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer"
+                      />
+                    </label>
+
+                    <label className="flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-150 cursor-pointer hover:bg-slate-100 transition select-none">
+                      <span className="text-[10px] text-slate-600 font-semibold">
+                        {language === "ar" ? "تضمين رمز QR المرمز للفحص" : "Include Simplified QR Code"}
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={includeQRCode}
+                        onChange={(e) => setIncludeQRCode(e.target.checked)}
+                        className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer"
+                      />
+                    </label>
+
+                    <label className="flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-150 cursor-pointer hover:bg-slate-100 transition select-none">
+                      <span className="text-[10px] text-slate-600 font-semibold">
+                        {language === "ar" ? "إظهار رمز الباركود الرقمي للفاتورة" : "Include Transaction Barcode"}
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={includeBarcode}
+                        onChange={(e) => setIncludeBarcode(e.target.checked)}
+                        className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer"
+                      />
+                    </label>
+
+                    <label className="flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-150 cursor-pointer hover:bg-slate-100 transition select-none">
+                      <span className="text-[10px] text-slate-600 font-semibold">
+                        {language === "ar" ? "إدراج رسالة الشكر والتذييل في الأسفل" : "Include Greeting/Footer Message"}
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={includeFooterMsg}
+                        onChange={(e) => setIncludeFooterMsg(e.target.checked)}
+                        className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer"
+                      />
+                    </label>
+                  </div>
+
+                  {/* Info notice box */}
+                  <div className="bg-slate-50 rounded-2xl p-3 border border-slate-150 mt-4 text-[10px] text-slate-500 flex items-start gap-2 leading-relaxed">
+                    <AlertCircle className="w-3.5 h-3.5 text-blue-600 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-bold text-slate-700">
+                        {language === "ar" ? "توافق تخطيط طباعة الكاشير الحرة" : "Simplified Invoicing compliance"}
+                      </p>
+                      <p className="mt-0.5">
+                        {language === "ar"
+                          ? "تمت تهيئة التخطيط ليتطابق مع طابعات الفواتير وحجم الورق المحدد. يرجى مراجعة الجدول والهوامش الجانبية قبل بدء الطباعة."
+                          : "This preview mirrors standard character alignments on continuous paper rolls. Adjust widths interactively for different terminal spacing."}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Confirm Buttons */}
+                <div className="pt-3 border-t flex flex-col sm:flex-row gap-2">
+                  <button
+                    type="button"
+                    onClick={triggerPrintJSReceipt}
+                    className="w-full sm:w-2/3 py-3 rounded-2xl bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-700 hover:to-cyan-600 text-white font-extrabold text-xs shadow-md flex items-center justify-center gap-2 cursor-pointer transition active:scale-95"
+                  >
+                    <Printer className="w-4 h-4" />
+                    <span>{language === "ar" ? "تأكيد والطباعة عبر PrintJS" : "Confirm & Print (PrintJS)"}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowPrintPreview(false)}
+                    className="w-full sm:w-1/3 py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center justify-center cursor-pointer transition active:scale-95"
+                  >
+                    {language === "ar" ? "رجوع للفاتورة" : "Back to Invoice"}
+                  </button>
+                </div>
+              </div>
+
+              {/* Right Column: Physical Paper Roll Live Drawing */}
+              <div className="w-full md:w-1/2 bg-slate-50 rounded-3xl p-4 flex flex-col items-center justify-center border border-slate-100 select-none relative overflow-hidden min-h-[440px]">
+                <span className="absolute top-2 right-3 text-[9px] font-bold text-slate-300 tracking-wider uppercase">
+                  {language === "ar" ? "ورقة المعاينة الحية" : "Receipt Live Paper"}
+                </span>
+
+                {/* Simulated continuous feed paper roll */}
+                <div 
+                  className="bg-[#fdfdfc] border-x border-slate-200/60 shadow-lg p-5 font-mono text-[9px] text-slate-900 transition-all duration-300 relative rounded-md"
+                  style={{ 
+                    width: previewPaperWidth === "58mm" ? "225px" : "295px",
+                    minHeight: "400px"
+                  }}
+                >
+                  {/* Rugged paper-cut zig-zags on top and bottom */}
+                  <div className="absolute top-0 inset-x-0 h-1 bg-repeat-x bg-[linear-gradient(45deg,transparent_25%,#f1f5f9_25%,#f1f5f9_50%,transparent_50%,transparent_75%,#f1f5f9_75%,#f1f5f9_100%)] bg-[length:6px_4px]" />
+
+                  {/* Header logo */}
+                  {includeReceiptLogo && (
+                    <div className="text-center space-y-0.5 mb-2.5">
+                      <h4 className="text-[11px] font-extrabold tracking-tight">
+                        {language === "ar" ? settings.storeName : settings.storeNameEn}
+                      </h4>
+                      <div className="text-[7.5px] uppercase tracking-wider text-slate-400 font-bold">
+                        {language === "ar" ? "فاتورة مبيعات تبسيطية ضريبية" : "Simplified Tax Invoice"}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Metadata fields */}
+                  <div className="border-b border-dashed border-slate-300 pb-2 space-y-1 text-slate-500 text-right leading-normal text-[8.5px]">
+                    <div className="flex justify-between">
+                      <span>{t("invoice_no")}:</span>
+                      <span className="font-bold font-sans text-slate-700">{checkedOutBill.invoiceNumber}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>{t("date")}:</span>
+                      <span className="font-sans text-slate-700">{new Date(checkedOutBill.date).toLocaleString()}</span>
+                    </div>
+                    {includeCashierName && (
+                      <div className="flex justify-between">
+                        <span>{t("cashier")}:</span>
+                        <span className="font-bold text-slate-700">{checkedOutBill.cashierName}</span>
+                      </div>
+                    )}
+                    {includeCustomerName && (
+                      <div className="flex justify-between">
+                        <span>{t("customer")}:</span>
+                        <span className="font-bold text-slate-700">{checkedOutBill.customerName}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Table lists */}
+                  <table className="w-full text-right my-2 text-[8px] border-collapse">
+                    <thead>
+                      <tr className="border-b border-dashed border-slate-300 font-bold text-slate-400">
+                        <th className="pb-1 text-right">{language === "ar" ? "الصنف" : "Item"}</th>
+                        <th className="pb-1 text-center">{language === "ar" ? "الكمية" : "Qty"}</th>
+                        <th className="pb-1 text-left">{language === "ar" ? "السعر" : "Price"}</th>
+                        <th className="pb-1 text-left">{language === "ar" ? "إجمالي" : "Total"}</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-dashed divide-slate-100">
+                      {checkedOutBill.items.map((it: any) => (
+                        <tr key={it.productId} className="text-slate-800 font-semibold">
+                          <td className="py-1 leading-normal pr-1 truncate max-w-[90px]">
+                            {language === "ar" ? it.name : it.nameEn}
+                          </td>
+                          <td className="py-1 text-center font-sans font-bold text-slate-700">{it.quantity}</td>
+                          <td className="py-1 text-left font-sans text-slate-600">{it.price.toFixed(1)}</td>
+                          <td className="py-1 text-left font-sans font-extrabold text-slate-900">{(it.price * it.quantity).toFixed(1)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+
+                  {/* Calculations total block */}
+                  <div className="border-t border-dashed border-slate-300 pt-1.5 space-y-1 text-right text-[8.5px]">
+                    <div className="flex justify-between text-slate-500">
+                      <span>{t("subtotal")}:</span>
+                      <span className="font-sans text-slate-700">{(checkedOutBill.total - checkedOutBill.tax + checkedOutBill.discount).toFixed(2)} {currency}</span>
+                    </div>
+                    {checkedOutBill.discount > 0 && (
+                      <div className="flex justify-between text-red-500">
+                        <span>{t("discount")}:</span>
+                        <span className="font-sans font-bold">-{checkedOutBill.discount.toFixed(2)} {currency}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-slate-500">
+                      <span>{t("tax_vat")} ({settings.taxRate}%):</span>
+                      <span className="font-sans text-slate-700">{checkedOutBill.tax.toFixed(2)} {currency}</span>
+                    </div>
+                    <div className="flex justify-between font-extrabold text-[10px] text-blue-600 py-1 border-t border-dashed border-slate-200">
+                      <span>{t("total")}:</span>
+                      <span className="font-sans">{checkedOutBill.total.toFixed(2)} {currency}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-500 border-t border-dashed border-slate-100 pt-0.5 text-[8px]">
+                      <span>{t("received_amount")}:</span>
+                      <span className="font-sans font-bold text-slate-650">{checkedOutBill.received.toFixed(2)} {currency}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-500 text-[8px]">
+                      <span>{t("change_amount")}:</span>
+                      <span className="font-sans font-bold text-slate-650">{checkedOutBill.change.toFixed(2)} {currency}</span>
+                    </div>
+                  </div>
+
+                  {/* QR Security scanner */}
+                  {includeQRCode && (
+                    <div className="mt-3.5 border-t border-dashed border-slate-200 pt-2.5">
+                      {renderElegentQRCode(checkedOutBill.invoiceNumber, checkedOutBill.total)}
+                      <div className="text-center text-[6.5px] text-slate-400 mt-1 font-bold uppercase">
+                        {language === "ar" ? "الفوترة الإلكترونية مبسطة" : "Simplified VAT E-Invoice"}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Barcode System identifier */}
+                  {includeBarcode && (
+                    <div className="mt-3.5 border-t border-dashed border-slate-200 pt-2.5">
+                      {renderMockBarcodeLines(checkedOutBill.invoiceNumber)}
+                      <span className="block text-center text-[7px] text-slate-400 tracking-wider font-bold">
+                        *{checkedOutBill.invoiceNumber}*
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Bottom Store greeting signature */}
+                  {includeFooterMsg && (
+                    <div className="mt-3.5 text-center text-[7.5px] text-slate-500 font-bold border-t border-dashed border-slate-100 pt-1.5 leading-normal">
+                      {language === "ar" ? "شكراً لزيارتكم وشرائكم!" : "Thank you for shopping with us!"}
+                    </div>
+                  )}
+
+                  {/* Rugged paper-cut zig-zags on top and bottom */}
+                  <div className="absolute bottom-0 inset-x-0 h-1 bg-repeat-x bg-[linear-gradient(45deg,transparent_25%,#f1f5f9_25%,#f1f5f9_50%,transparent_50%,transparent_75%,#f1f5f9_75%,#f1f5f9_100%)] bg-[length:6px_4px]" />
+                </div>
               </div>
             </motion.div>
           </div>

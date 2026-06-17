@@ -26,7 +26,11 @@ import {
   Menu, 
   X,
   Sparkles,
-  UserCheck
+  UserCheck,
+  Sun,
+  Moon,
+  Calendar,
+  Clock
 } from "lucide-react";
 
 function MainAppLayout() {
@@ -38,11 +42,30 @@ function MainAppLayout() {
     isRtl, 
     t, 
     settings,
+    saveSettings,
     loading 
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<string>("dashboard");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  React.useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const currentTheme = settings.theme || "light";
+
+  React.useEffect(() => {
+    if (currentTheme === "dark") {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+  }, [currentTheme]);
 
   // If loading seed assets
   if (loading) {
@@ -170,6 +193,31 @@ function MainAppLayout() {
             </div>
           </div>
 
+          {/* Active Live App Date & Ticking Clock */}
+          <div className="p-3 bg-white/50 border border-slate-200/40 rounded-2xl flex flex-col gap-1.5 select-none font-sans">
+            <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400">
+              <Calendar className="w-3.5 h-3.5 text-blue-500" />
+              <span className="text-[10px] font-bold">
+                {currentTime.toLocaleDateString(language === "ar" ? "ar-SA" : "en-US", {
+                  weekday: "long",
+                  year: "numeric",
+                  month: "short",
+                  day: "numeric",
+                })}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 text-slate-800 dark:text-slate-200 font-mono">
+              <Clock className="w-3.5 h-3.5 text-cyan-500 animate-pulse" />
+              <span className="text-xs font-black tracking-wider">
+                {currentTime.toLocaleTimeString(language === "ar" ? "ar-SA" : "en-US", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  second: "2-digit",
+                })}
+              </span>
+            </div>
+          </div>
+
           {/* Navigation Links list */}
           <nav className="space-y-1.5 select-none">
             {filteredLinks.map((item) => {
@@ -215,6 +263,33 @@ function MainAppLayout() {
             <span className="text-[9px] font-normal opacity-50 font-mono">AR/EN</span>
           </button>
 
+          {/* Theme mode toggle switcher */}
+          <button
+            id="sidebar-theme-switch"
+            onClick={() => {
+              const nextTheme = settings.theme === "dark" ? "light" : "dark";
+              saveSettings({ ...settings, theme: nextTheme });
+            }}
+            className="w-full py-2 px-3 rounded-xl border border-slate-200/80 hover:bg-slate-150 text-[10px] text-slate-500 font-bold flex items-center justify-between cursor-pointer"
+          >
+            <span className="flex items-center gap-2">
+              {settings.theme === "dark" ? (
+                <>
+                  <Sun className="w-3.5 h-3.5 text-yellow-500 animate-spin-slow" />
+                  <span>{language === "ar" ? "الوضع المضيء" : "Light Mode"}</span>
+                </>
+              ) : (
+                <>
+                  <Moon className="w-3.5 h-3.5 text-indigo-500" />
+                  <span>{language === "ar" ? "الوضع الداكن" : "Dark Mode"}</span>
+                </>
+              )}
+            </span>
+            <span className="text-[9px] font-normal opacity-50 font-mono">
+              {settings.theme === "dark" ? "DARK" : "LIGHT"}
+            </span>
+          </button>
+
           {/* Log out */}
           <button
             id="sidebar-logout"
@@ -237,14 +312,30 @@ function MainAppLayout() {
             <h1 className="text-xl font-extrabold text-slate-850 tracking-tight">
               {navLinks.find((link) => link.id === activeTab)?.label}
             </h1>
-            <span className="text-[10px] font-medium text-slate-400">
-              {new Date().toLocaleDateString(language === "ar" ? "ar-SA" : "en-US", {
-                weekday: "long",
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-              })}
-            </span>
+            <div className="flex items-center gap-3 text-[10px] font-bold text-slate-400 mt-1">
+              <span className="flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5 text-blue-500" />
+                <span>
+                  {currentTime.toLocaleDateString(language === "ar" ? "ar-SA" : "en-US", {
+                    weekday: "long",
+                    year: "numeric",
+                    month: "long",
+                    day: "numeric",
+                  })}
+                </span>
+              </span>
+              <span className="opacity-30">|</span>
+              <span className="flex items-center gap-1.5 font-mono text-xs text-slate-800 dark:text-slate-200">
+                <Clock className="w-3.5 h-3.5 text-cyan-500 animate-pulse" />
+                <span>
+                  {currentTime.toLocaleTimeString(language === "ar" ? "ar-SA" : "en-US", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    second: "2-digit",
+                  })}
+                </span>
+              </span>
+            </div>
           </div>
 
           {/* Core system branding */}

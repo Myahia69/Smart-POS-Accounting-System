@@ -10,7 +10,10 @@ import {
   Save, 
   CheckCircle2,
   Image as ImageIcon,
-  ShieldX
+  ShieldX,
+  Palette,
+  Sun,
+  Moon
 } from "lucide-react";
 
 export default function Settings() {
@@ -44,6 +47,7 @@ export default function Settings() {
   const [taxRate, setTaxRate] = useState(String(settings.taxRate));
   const [logoUrl, setLogoUrl] = useState(settings.logoUrl || "");
   const [printType, setPrintType] = useState<"A4" | "thermal">(settings.printType);
+  const [theme, setTheme] = useState<"light" | "dark">(settings.theme || "light");
 
   const [saving, setSaving] = useState(false);
   const [showToast, setShowToast] = useState(false);
@@ -59,6 +63,7 @@ export default function Settings() {
       taxRate: Number(taxRate) || 0,
       logoUrl,
       printType,
+      theme,
     };
 
     const done = await saveSettings(payload);
@@ -222,6 +227,43 @@ export default function Settings() {
                 }`}
               >
                 <span>{t("print_a4")}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Theme Mode Selection */}
+          <div>
+            <label className="block text-[10px] font-bold text-slate-500 mb-2 px-1 flex items-center justify-end gap-1">
+              <span>{language === "ar" ? "مظهر النظام ونمط الألوان" : "System Theme & Color Scheme"}</span>
+              <Palette className="w-3.5 h-3.5 text-slate-400" />
+            </label>
+            <div className="grid grid-cols-2 gap-3 select-none">
+              <button
+                id="set-theme-light"
+                type="button"
+                onClick={() => setTheme("light")}
+                className={`py-2.5 rounded-2xl text-xs font-bold border flex items-center justify-center gap-2 cursor-pointer transition ${
+                  theme === "light"
+                    ? "bg-blue-600 border-blue-600 text-white shadow-sm"
+                    : "bg-white border-slate-200 text-slate-650 hover:bg-slate-50"
+                }`}
+              >
+                <Sun className="w-3.5 h-3.5 text-yellow-500" />
+                <span>{language === "ar" ? "الوضع المضيء (نهاري)" : "Light Neumorphic"}</span>
+              </button>
+
+              <button
+                id="set-theme-dark"
+                type="button"
+                onClick={() => setTheme("dark")}
+                className={`py-2.5 rounded-2xl text-xs font-bold border flex items-center justify-center gap-2 cursor-pointer transition ${
+                  theme === "dark"
+                    ? "bg-blue-600 border-blue-600 text-white shadow-sm"
+                    : "bg-white border-slate-200 text-slate-650 hover:bg-slate-50"
+                }`}
+              >
+                <Moon className="w-3.5 h-3.5 text-indigo-400" />
+                <span>{language === "ar" ? "الوضع الداكن (ليلي)" : "Dark Neumorphic"}</span>
               </button>
             </div>
           </div>

@@ -1,0 +1,163 @@
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Cairo", "Inter", system-ui, -apple-system, sans-serif;
+}
+
+:root {
+  --bg: #E0E5EC;
+  --shadow-dark: #a3b1c6;
+  --shadow-light: #ffffff;
+  --accent: #3182ce;
+}
+
+body {
+  background-color: var(--bg) !important;
+  color: #4A5568 !important;
+  font-family: 'Cairo', sans-serif;
+}
+
+/* Chrome, Safari, Edge, Opera: Hide number input spinners */
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Firefox: Hide number input spinners */
+input[type=number] {
+  -moz-appearance: textfield;
+}
+
+/* Custom Soft Glass Neumorphism presets redesigned for Geometric Balance */
+.glass-bg, .glass-panel {
+  background: rgba(255, 255, 255, 0.25) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.4) !important;
+  border-radius: 24px !important;
+}
+
+.dark-glass-bg {
+  background: rgba(30, 41, 59, 0.45) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 24px !important;
+}
+
+/* Soft Neumorphic dual shadows matching Geometric Balance spec */
+.neumorphic-flat, .neumorph-raised {
+  background: var(--bg) !important;
+  border-radius: 20px !important;
+  box-shadow: 9px 9px 16px var(--shadow-dark), -9px -9px 16px var(--shadow-light) !important;
+  border: none !important;
+}
+
+.neumorphic-sunken, .neumorph-inset {
+  background: var(--bg) !important;
+  border-radius: 20px !important;
+  box-shadow: inset 6px 6px 12px var(--shadow-dark), inset -6px -6px 12px var(--shadow-light) !important;
+  border: none !important;
+}
+
+/* Accent glass panels */
+.blue-glass-panel {
+  background: rgba(49, 130, 206, 0.15) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.4) !important;
+  box-shadow: 6px 6px 12px var(--shadow-dark), -6px -6px 12px var(--shadow-light) !important;
+}
+
+.green-glass-panel {
+  background: rgba(72, 187, 120, 0.15) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.4) !important;
+  box-shadow: 6px 6px 12px var(--shadow-dark), -6px -6px 12px var(--shadow-light) !important;
+}
+
+.red-glass-panel {
+  background: rgba(229, 62, 62, 0.12) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.4) !important;
+  box-shadow: 6px 6px 12px var(--shadow-dark), -6px -6px 12px var(--shadow-light) !important;
+}
+
+/* Soft Neumorphic interactive buttons styled with transitions for dynamic active state */
+.neumorphic-btn, .btn-3d {
+  background: var(--bg) !important;
+  border-radius: 20px !important;
+  box-shadow: 9px 9px 16px var(--shadow-dark), -9px -9px 16px var(--shadow-light) !important;
+  border: none !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  color: #4A5568 !important;
+}
+
+.neumorphic-btn:hover, .btn-3d:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 11px 11px 20px var(--shadow-dark), -11px -11px 20px var(--shadow-light) !important;
+}
+
+.neumorphic-btn:active, .btn-3d:active, .neumorphic-btn:focus-visible, .btn-3d:focus-visible {
+  transform: scale(0.98) !important;
+  box-shadow: inset 6px 6px 12px var(--shadow-dark), inset -6px -6px 12px var(--shadow-light) !important;
+}
+
+/* Override standard classes to match the Geometrical grey canvas color palette */
+.bg-slate-100 {
+  background-color: var(--bg) !important;
+}
+
+.bg-white {
+  background-color: rgba(255, 255, 255, 0.45) !important;
+}
+
+.bg-slate-50 {
+  background-color: rgba(255, 255, 255, 0.25) !important;
+}
+
+/* Custom scrollbar to keep layout premium */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(240, 245, 255, 0.2);
+  border-radius: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--shadow-dark);
+  border-radius: 8px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(163, 177, 198, 0.8);
+}
+
+/* Print thermal styling */
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+  .print-thermal-receipt {
+    width: 80mm;
+    max-width: 80mm;
+    padding: 2mm;
+    font-family: 'Cairo', sans-serif;
+    font-size: 11px;
+    line-height: 1.2;
+  }
+}

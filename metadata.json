@@ -1,0 +1,6 @@
+{
+  "name": "Smart POS & Accounting System",
+  "description": "A fully-featured POS and accounting system with Arabic and English bilingual support, featuring a soft glass neumorphic visual style, offline capabilities, sales dashboard, product management, bill printing, and user access control.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

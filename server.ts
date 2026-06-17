@@ -85,6 +85,7 @@ interface AppSettings {
   taxRate: number;
   logoUrl?: string;
   printType: "A4" | "thermal";
+  theme?: "light" | "dark";
 }
 
 interface DBStructure {
@@ -273,6 +274,7 @@ const initialDB: DBStructure = {
     taxRate: 15,
     logoUrl: "",
     printType: "thermal",
+    theme: "light",
   },
 };
 
